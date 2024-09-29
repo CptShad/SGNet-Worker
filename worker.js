@@ -1,24 +1,23 @@
 import { getRedisClient, initRedis } from './modules/redis.js';
-import { ollamaInference, huggingFaceInference, streamingOllamaInference } from './modules/interface.js';
+import { ollamaInference, huggingFaceInference } from './modules/interface.js';
 import dotenv from 'dotenv';
-import { parseResponse } from './utils/utils.js';
 
 // Load environment variables from .env file
-dotenv.config();
+dotenv.config({ path: `${__dirname}/.env` });
 
 async function gpuWorker() {
-	initRedis();
 	const redis = getRedisClient();
 
 	while (true) {
 		const task = await redis.blpop('llm_tasks', 0);
-		const { taskId, provider, model, prompt, message, stream } = JSON.parse(task[1]);
+		const params = JSON.parse(task[1]);
+		const { taskId, provider, stream } = JSON.parse(task[1]);
 
 		try {
 			let interfaceProvider;
 			switch (provider) {
 				case "ollama": {
-					interfaceProvider = stream ? streamingOllamaInference : ollamaInference;
+					interfaceProvider = ollamaInference;
 				}
 					break;
 
@@ -33,18 +32,30 @@ async function gpuWorker() {
 					break;
 			}
 
-			await interfaceProvider(model, prompt, async (chunk) => {
+			await interfaceProvider(params, async (chunk) => {
 				await redis.publish(`result:${taskId}`, JSON.stringify(chunk));
 			});
 
 			// Signal end of stream
-			await redis.publish(`result:${taskId}`, 'END_OF_STREAM');
-		} 
+			if (stream) await redis.publish(`result:${taskId}`, 'END_OF_STREAM');
+		}
 		catch (error) {
 			await redis.publish(`result:${taskId}`, JSON.stringify({ error: error?.message }));
-			await redis.publish(`result:${taskId}`, 'END_OF_STREAM');
+			if (stream) await redis.publish(`result:${taskId}`, 'END_OF_STREAM');
 		}
 	}
 }
 
-gpuWorker().catch(console.error);
+(async () => {
+    try {
+        // Initialize Redis before starting the server
+        await initRedis();
+
+        // Start worker
+        gpuWorker();
+    } 
+	catch (error) {
+        console.error('Error in GPU worker: ', error);
+        //process.exit(1); // Exit on error
+    }
+})();
