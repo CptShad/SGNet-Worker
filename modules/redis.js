@@ -1,11 +1,19 @@
 const Redis = require('ioredis');
 const dotenv = require('dotenv');
+const { logger } = require("../utils/logger.js");
 
 dotenv.config({ path: `${__dirname}/.env` });
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 
+/**
+ * @type {Redis.Redis}
+ */
 let redisClient;
 
+/**
+ * Iniatialize Redis Client
+ * @returns 
+ */
 const initRedis = async () => {
   return new Promise((resolve, reject) => {
       try {
@@ -13,32 +21,36 @@ const initRedis = async () => {
 
           // Listen for Redis connection events
           redisClient.on('ready', () => {
-              console.log('[Redis] Ready to go.');
+              logger.log('[Redis] Ready to go.');
               resolve(); // Resolve when Redis is ready
           });
 
           redisClient.on('error', (err) => {
               if (err.code === "ECONNREFUSED") {
-                  console.error(`[Redis] Connection Error: ${err.name}: ${err.message}`);
+                  logger.error(`[Redis] Connection Error: ${err.name}: ${err.message}`);
                   reject(new Error(`[Redis] Connection Error: ${err.message}`));
               } else {
-                  console.error('[Redis] Error: ', err.message || "Unexpected Error");
+                  logger.error('[Redis] Error: ', err.message || "Unexpected Error");
                   reject(new Error(err.message || "Unexpected Error"));
               }
           });
 
           redisClient.on('end', () => {
-              console.warn('[Redis] Connection closed');
+              logger.warn('[Redis] Connection closed');
           });
 
       } 
       catch (error) {
-          console.error('[Redis] Failed to initialize:', error);
+          logger.error('[Redis] Failed to initialize:', error);
           reject(error); // Reject if there's an issue initializing Redis
       }
   });
 };
 
+/**
+ * Get redis client instance.
+ * @returns {Redis.Redis} Redis client instance
+ */
 const getRedisClient = () => {
   if (!redisClient) {
       throw new Error('[Redis] Redis client not initialized');

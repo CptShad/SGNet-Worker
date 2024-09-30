@@ -1,69 +1,27 @@
 import { fetch } from 'bun';
 import dotenv from 'dotenv';
-import { GENERATE_VALID_KEYS, CHAT_VALID_KEYS, MESSAGE_FIELDS } from '../constants/ollama.constants';
+const { logger } = require("../utils/logger.js");
+import { sanitizeOllamaPayload } from '../utils/utils.js';
 
 dotenv.config({ path: `${__dirname}/.env` });
 
+/**
+ * Interacts with ollamas API based on params.
+ * - Sanitize payload
+ * - Make request to ollamas API (generate/chat)
+ * - Return result to callback.
+ * @param {*} params 
+ * @param {*} callback 
+ * @returns 
+ */
 export async function ollamaInference(params, callback) {
     try {
         // Get the Ollama IP from the environment variable
         const OLLAMA_IP = process.env.OLLAMA_IP || 'localhost:11434';
-        const { model, prompt, messages, stream, type } = params;
+        const { taskId, stream, type } = params;
 
         // Prepare the request payload
-        let payload;
-
-        switch (type) { 
-            case "generate":
-                payload = {
-                    model: model,
-                    prompt: prompt,
-                    stream: stream || false,
-                };
-                // Loop through params and add to payload if they are in GENERATE_VALID_KEYS
-                for (const key of Object.keys(params)) {
-                    if (GENERATE_VALID_KEYS.includes(key)) {
-                        payload[key] = params[key];
-                    }
-                }
-                break;
-
-            case "chat":
-                payload = {
-                    model: model,
-                    messages: messages.filter(message => {
-                        // Ensure only valid message fields are included
-                        return Object.keys(message).every(key => MESSAGE_FIELDS.includes(key));
-                    }),
-                    stream: stream || false,
-                };
-
-                // Only add `tools` if stream is set to `false` and `tools` is provided
-                if (params?.tools && !stream) {
-                    payload.tools = tools;
-                }
-
-                // Loop through params and add to payload if they are in CHAT_VALID_KEYS
-                for (const key of Object.keys(params)) {
-                    if (GENERATE_VALID_KEYS.includes(key)) {
-                        payload[key] = optionalParams[key];
-                    }
-                }
-                break;
-
-            default:
-                payload = {
-                    model: model,
-                    prompt: prompt,
-                    stream: stream || false
-                };
-                // Loop through optionalParams and add to payload if they are in GENERATE_VALID_KEYS
-                for (const key of Object.keys(params)) {
-                    if (GENERATE_VALID_KEYS.includes(key)) {
-                        payload[key] = params[key];
-                    } 
-                }
-        }
+        const payload = sanitizeOllamaPayload(params);
 
         // Send the POST request to Ollama's API
         const url = `http://${OLLAMA_IP}/${type === "generate" ? "api/generate" : "api/chat"}`;
@@ -73,11 +31,20 @@ export async function ollamaInference(params, callback) {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify(payload),
-        }); 
+        });
 
         // Check if the response is ok (status 200-299)
         if (!response.ok) {
-            throw new Error(`Ollama inference failed with status ${response.status}: ${response.statusText}`);
+            try {
+                const result = await response.json();
+                if (result?.error) {
+                    logger.error(`Ollama interface error for taskId ${taskId}: ${result.error}`);
+                }
+            }
+            catch (err) {
+                logger.error(`Error parsing Ollama response json for taskId ${taskId}: ${err?.message}`);
+            }
+            throw new Error(`Ollama inference failed for taskId ${taskId} with status ${response.status}: ${response.statusText}`);
         }
 
         if (stream) {
@@ -102,32 +69,33 @@ export async function ollamaInference(params, callback) {
                         const jsonChunk = JSON.parse(chunk);
                         if (jsonChunk.response) {
                             // for generate api. This will be send back to the response stream
-                            await callback({ text: jsonChunk.response });
+                            await callback(jsonChunk.response);
                         }
                         if (jsonChunk.message) {
                             // for chat api
-                            await callback({ message: jsonChunk.message })
+                            await callback(jsonChunk.message)
                         }
                         if (jsonChunk.done) {
-                            console.log(`Successfully finished chunk processing for taskId ${params?.taskId}`);
+                            logger.log(`Successfully finished chunk processing for taskId ${taskId}`);
                             return; // End of stream
                         }
                     }
                     catch (e) {
-                        console.error(`Error parsing JSON chunk for taskId ${taskId}: ${e}`);
+                        logger.error(`Error parsing JSON chunk for taskId ${taskId}: ${e}`);
                     }
+
                 }
             }
         }
         else {
             const result = await response.text();
-            console.log(`Successfully fetched ollama result for taskId ${params?.taskId}`);
+            logger.log(`Successfully fetched ollama result for taskId ${taskId} with response ${result}`);
             return callback(result);
         }
 
     }
     catch (error) {
-        console.error(`Error during Ollama inference: ${error.message}`);
+        logger.error(`Error during Ollama inference: ${error.message}`);
         throw error;
     }
 }

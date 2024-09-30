@@ -1,15 +1,22 @@
 import { getRedisClient, initRedis } from './modules/redis.js';
 import { ollamaInference, huggingFaceInference } from './modules/interface.js';
 import dotenv from 'dotenv';
+const { logger } = require("./utils/logger.js");
 
 // Load environment variables from .env file
 dotenv.config({ path: `${__dirname}/.env` });
 
+/**
+ * Main GPU Worker
+ * - Initialize Redis Client
+ * - Wait for messages from the queue
+ * - Process the message and return the result to the queue according to provider
+ */
 async function gpuWorker() {
 	const redis = getRedisClient();
-
+	logger.info("Worker ready!");
 	while (true) {
-		const task = await redis.blpop('llm_tasks', 0);
+		const task = await redis.blpop('llm_tasks', 0); 
 		const params = JSON.parse(task[1]);
 		const { taskId, provider, stream } = JSON.parse(task[1]);
 
@@ -47,15 +54,15 @@ async function gpuWorker() {
 }
 
 (async () => {
-    try {
-        // Initialize Redis before starting the server
-        await initRedis();
+	try {
+		// Initialize Redis before starting the server
+		await initRedis();
 
-        // Start worker
-        gpuWorker();
-    } 
+		// Start worker
+		gpuWorker();
+	}
 	catch (error) {
-        console.error('Error in GPU worker: ', error);
-        //process.exit(1); // Exit on error
-    }
+		logger.error('Error in GPU worker: ', error);
+		//process.exit(1); // Exit on error
+	}
 })();
