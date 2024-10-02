@@ -16,7 +16,7 @@ async function gpuWorker() {
 	const redis = getRedisClient();
 	logger.info("Worker ready!");
 	while (true) {
-		const task = await redis.blpop('llm_tasks', 0); 
+		const task = await redis.blpop('llm_tasks', 0);
 		const params = JSON.parse(task[1]);
 		const { taskId, provider, stream } = JSON.parse(task[1]);
 
