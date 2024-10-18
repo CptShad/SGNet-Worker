@@ -2,8 +2,8 @@ const Redis = require('ioredis');
 const dotenv = require('dotenv');
 const { logger } = require("../utils/logger.js");
 
-dotenv.config({ path: `${__dirname}/.env` });
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+dotenv.config({ path: `${__dirname}/../.env` });
+const REDIS_IP = process.env.REDIS_IP || 'localhost:6379';
 
 /**
  * @type {Redis.Redis}
@@ -17,11 +17,16 @@ let redisClient;
 const initRedis = async () => {
     return new Promise((resolve, reject) => {
         try {
-            redisClient = new Redis(REDIS_URL);
+            dotenv.config({ path: `${__dirname}/.env` });
+            redisClient = createNewConnection();
+
+            redisClient.on('connect', () => {
+                logger.info('[Redis] Connecting...');
+            });
 
             // Listen for Redis connection events
             redisClient.on('ready', () => {
-                logger.log('[Redis] Ready to go.');
+                logger.info('[Redis] Ready to go.');
                 resolve(); // Resolve when Redis is ready
             });
 
@@ -58,7 +63,19 @@ const getRedisClient = () => {
     return redisClient;
 };
 
+/**
+ * Create new redis connection
+ * @returns {Redis.Redis}
+ */
+const createNewConnection = () => {
+    return new Redis({
+        host: REDIS_IP.split(':')[0],
+        port: REDIS_IP.split(':')[1]
+    });
+}
+
 module.exports = {
     initRedis: initRedis,
-    getRedisClient: getRedisClient
+    getRedisClient: getRedisClient,
+    createNewConnection: createNewConnection
 };

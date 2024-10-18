@@ -1,6 +1,7 @@
 import { getRedisClient, initRedis } from './modules/redis.js';
 import { ollamaInference, huggingFaceInference } from './modules/interface.js';
 import dotenv from 'dotenv';
+import * as heartbeat from './modules/heartbeat.js'
 const { logger } = require("./utils/logger.js");
 
 // Load environment variables from .env file
@@ -58,8 +59,12 @@ async function gpuWorker() {
 		// Initialize Redis before starting the server
 		await initRedis();
 
+		// Register worker
+		await heartbeat.registerWorker();
+		setInterval(heartbeat.sendHeartbeat, 5000);
+
 		// Start worker
-		gpuWorker();
+		await gpuWorker();
 	}
 	catch (error) {
 		logger.error('Error in GPU worker: ', error);
