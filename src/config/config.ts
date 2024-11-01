@@ -26,6 +26,7 @@ const config = {
 	ollama_ip: process.env.OLLAMA_IP || 'localhost:11434',
 	redis_namespace: process.env.REDIS_NAMESPACE || 'sgnet',
 	redis_set: process.env.REDIS_SET || 'tasks',
+	active_models: process.env.ACTIVE_MODELS ? JSON.parse(process.env.ACTIVE_MODELS) : [],
 };
 
 logger.info(`Config loaded: ${JSON.stringify(config)}`);

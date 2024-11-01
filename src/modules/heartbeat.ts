@@ -39,7 +39,7 @@ const sendHeartbeat = async () => {
 	const timestamp = Date.now();
 
 	try {
-		const redisClient = createNewConnection();
+		const redisClient = await createNewConnection();
 
 		// Update last_heartbeat_at field in the hash
 		const WORKER_KEY = `${config.redis_namespace}:workers:registered:${WORKER_UUID}`;

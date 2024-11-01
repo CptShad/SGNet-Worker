@@ -84,7 +84,7 @@ export async function ollamaInference(params: any, callback: any) {
 			}
 		}
 		else {
-			const result = await response.text();
+			const result = await response.json();
 			logger.log(`Successfully fetched ollama result for taskId ${taskId} with response ${result}`);
 			return callback(result);
 		}

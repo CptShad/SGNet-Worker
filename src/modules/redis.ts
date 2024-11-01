@@ -16,10 +16,9 @@ let redisClient: Redis;
  * @returns {Promise<void>}
  */
 async function initRedis(): Promise<void> {
+	redisClient = await createNewConnection();
 	return new Promise<void>((resolve, reject) => {
 		try {
-			redisClient = createNewConnection();
-
 			redisClient.on('connect', () => {
 				logger.info('[Redis] Connecting...');
 			});
@@ -65,14 +64,25 @@ async function getRedisClient(): Promise<Redis> {
 
 /**
  * Create new redis connection
+ * @param raw Whether or not to wait for the client to be ready (return the true conenction).
  * @returns {Promise<Redis>}
+ * @returns 
  */
-function createNewConnection(): Redis {
+async function createNewConnection(raw = false): Promise<Redis> {
 	const [host, port] = REDIS_IP.split(':');
-	return new Redis({
+	const redis = new Redis({
 		host,
 		port: parseInt(port, 10),
 	});
+	if (raw) return redis;
+
+	// Wait for the connection to be established
+	await new Promise((resolve, reject) => {
+		redis.on('connect', resolve);
+		redis.on('error', reject);
+	});
+
+	return redis;
 }
 
 export {
